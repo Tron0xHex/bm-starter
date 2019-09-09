@@ -1,0 +1,16 @@
+[package]
+name = "bm-starter"
+version = "0.1.0"
+authors = ["Tron0xHex <41690867+Tron0xHex@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winapi = { version = "0.3.7", features = ["winuser", "winbase", "consoleapi", "memoryapi", "handleapi", "processthreadsapi", "fileapi", "memoryapi"]}
+spin = "0.5.0"
+libc = "0.2.62"
+
+[lib]
+name = "BmStarter"
+crate-type = ["cdylib"]
