@@ -24,8 +24,10 @@ use crate::mapped_file::MappedFile;
 use crate::message::Message;
 use crate::request_type::RequestType;
 
+use spin::RwLock;
+
 pub struct LoaderEmulatorInner {
-    loader_emulator: Arc<spin::RwLock<LoaderEmulator>>,
+    loader_emulator: Arc<RwLock<LoaderEmulator>>,
 }
 
 pub struct LoaderEmulator {
@@ -39,7 +41,7 @@ pub struct LoaderEmulator {
 impl LoaderEmulatorInner {
     pub fn new() -> LoaderEmulatorInner {
         LoaderEmulatorInner {
-            loader_emulator: Arc::new(spin::RwLock::new(LoaderEmulator::new())),
+            loader_emulator: Arc::new(RwLock::new(LoaderEmulator::new())),
         }
     }
 

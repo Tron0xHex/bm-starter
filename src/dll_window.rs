@@ -1,3 +1,6 @@
+use crate::consts::{CLASS_NAME, WINDOW_NAME};
+use crate::win32::win32_string;
+
 use winapi::shared::{
     minwindef::{FALSE, HINSTANCE, LPARAM, LRESULT, TRUE, UINT, WPARAM},
     windef::HWND,
@@ -11,21 +14,21 @@ use winapi::um::winuser::{
 };
 
 use std::collections::HashMap;
+use std::mem;
+use std::ptr;
 use std::sync::Arc;
-
-use crate::consts::{CLASS_NAME, WINDOW_NAME};
-use crate::win32::win32_string;
+use spin::RwLock;
 
 pub type OnMessageCallback = Box<dyn Fn(HWND, WPARAM, LPARAM)>;
 
 pub struct DllWindowInner {
-    pub dll_window: Arc<spin::RwLock<DllWindow>>,
+    pub dll_window: Arc<RwLock<DllWindow>>,
 }
 
 impl DllWindowInner {
     pub fn new() -> DllWindowInner {
         DllWindowInner {
-            dll_window: Arc::new(spin::RwLock::new(DllWindow::new())),
+            dll_window: Arc::new(RwLock::new(DllWindow::new())),
         }
     }
 
@@ -50,10 +53,10 @@ impl DllWindowInner {
             0,
             200,
             100,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
             dll_window.h_instance,
-            std::ptr::null_mut(),
+            ptr::null_mut(),
         );
 
         if dll_window.handle.is_null() {
@@ -63,7 +66,7 @@ impl DllWindowInner {
         SetWindowLongPtrW(
             dll_window.handle,
             GWLP_USERDATA,
-            std::mem::transmute(self.dll_window.clone()),
+            mem::transmute(self.dll_window.clone()),
         );
 
         ShowWindow(dll_window.handle, SW_HIDE);
@@ -92,7 +95,7 @@ pub unsafe extern "system" fn dll_window_proc(
         return 0;
     } else {
         if self_ptr != 0 {
-            let dll_window: Arc<spin::RwLock<DllWindow>> = std::mem::transmute(self_ptr);
+            let dll_window: Arc<RwLock<DllWindow>> = mem::transmute(self_ptr);
 
             for (id, callback) in dll_window.read().callbacks.iter() {
                 if msg == *id {
@@ -111,8 +114,8 @@ impl DllWindow {
     pub fn new() -> DllWindow {
         DllWindow {
             callbacks: HashMap::new(),
-            h_instance: std::ptr::null_mut(),
-            handle: std::ptr::null_mut(),
+            h_instance: ptr::null_mut(),
+            handle: ptr::null_mut(),
         }
     }
 
@@ -130,10 +133,10 @@ impl DllWindow {
             lpszClassName: class_name.as_ptr(),
             cbClsExtra: 0,
             cbWndExtra: 0,
-            hIcon: std::ptr::null_mut(),
-            hCursor: std::ptr::null_mut(),
-            hbrBackground: std::ptr::null_mut(),
-            lpszMenuName: std::ptr::null_mut(),
+            hIcon: ptr::null_mut(),
+            hCursor: ptr::null_mut(),
+            hbrBackground: ptr::null_mut(),
+            lpszMenuName: ptr::null_mut(),
         };
 
         if RegisterClassW(&wcex) == 0 {

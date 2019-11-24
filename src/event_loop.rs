@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::Duration;
 
 type Callback = Box<dyn Fn() -> Result<(), ()>>;
@@ -31,7 +32,7 @@ impl EventLoop {
                 }
             }
 
-            std::thread::sleep(self.delay);
+            thread::sleep(self.delay);
         }
     }
 
