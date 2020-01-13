@@ -1,6 +1,10 @@
+use crate::consts::{BUFFER_SIZE, EXE_NAME, IN_MESSAGE_ID};
+use crate::dll_window::{DllWindow, DllWindowInner};
+use crate::event_loop::EventLoop;
+use crate::mapped_file::MappedFile;
+use crate::message::Message;
+use crate::request_type::RequestType;
 use crate::win32::win32_string;
-use std::cell::RefCell;
-use std::sync::Arc;
 
 use winapi::shared::minwindef::{
     DWORD, FALSE, HINSTANCE, LPARAM, LPCVOID, LPVOID, LRESULT, TRUE, WPARAM,
@@ -17,48 +21,37 @@ use winapi::um::winuser::{InSendMessage, ReplyMessage};
 
 use winapi::um::memoryapi::{ReadProcessMemory, WriteProcessMemory};
 
-use crate::consts::{BUFFER_SIZE, EXE_NAME, IN_MESSAGE_ID};
-use crate::dll_window::{DllWindow, DllWindowInner};
-use crate::event_loop::EventLoop;
-use crate::mapped_file::MappedFile;
-use crate::message::Message;
-use crate::request_type::RequestType;
-
 use spin::RwLock;
-
-pub struct LoaderEmulatorInner {
-    loader_emulator: Arc<RwLock<LoaderEmulator>>,
-}
+use std::cell::RefCell;
+use std::env::current_dir;
+use std::mem::{size_of, zeroed};
+use std::process::exit;
+use std::ptr::{copy_nonoverlapping, null, null_mut};
+use std::slice::from_raw_parts;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub struct LoaderEmulator {
-    exe_path: String,
-    process_handle: Arc<RefCell<HANDLE>>,
-    dll_window_inner: DllWindowInner,
-    event_loop: EventLoop,
-    mapped_file: MappedFile,
+    inner: Arc<RwLock<LoaderEmulatorInner>>,
 }
 
-impl LoaderEmulatorInner {
-    pub fn new() -> LoaderEmulatorInner {
-        LoaderEmulatorInner {
-            loader_emulator: Arc::new(RwLock::new(LoaderEmulator::new())),
+impl LoaderEmulator {
+    pub fn new() -> LoaderEmulator {
+        LoaderEmulator {
+            inner: Arc::new(RwLock::new(LoaderEmulatorInner::new())),
         }
     }
 
     pub unsafe fn start(&mut self, h_module: HINSTANCE) -> bool {
-        let loader_emulator = &mut self.loader_emulator.write();
+        let loader_emulator = &mut self.inner.write();
 
-        loader_emulator.exe_path = std::env::current_dir()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+        loader_emulator.exe_path = current_dir().unwrap().to_str().unwrap().to_string();
 
         let process_handle_arc = loader_emulator.process_handle.clone();
 
         loader_emulator
-            .dll_window_inner
             .dll_window
+            .inner
             .write()
             .register_on_message_callback(
                 IN_MESSAGE_ID,
@@ -66,7 +59,7 @@ impl LoaderEmulatorInner {
                     let process_handle_arc_clone = process_handle_arc.clone();
 
                     if InSendMessage() == TRUE {
-                        LoaderEmulator::on_income_message_call_back_proxy(
+                        LoaderEmulatorInner::on_income_message_callback_proxy(
                             *process_handle_arc_clone.borrow(),
                             hwnd,
                             wparam,
@@ -76,32 +69,27 @@ impl LoaderEmulatorInner {
                 }),
             );
 
-        if !loader_emulator.dll_window_inner.create(h_module) {
-            panic!("Unable to create loader window!");
+        if !loader_emulator.dll_window.create(h_module) {
+            panic!("Unable to create the loader window!");
         }
 
-        let mut message: Message = std::mem::zeroed();
+        let mut message: Message = zeroed();
 
         if !loader_emulator.mapped_file.create(BUFFER_SIZE as usize) {
-            panic!("Unable to create file.");
+            panic!("Unable to create the file.");
         }
 
         message.in_message_id = IN_MESSAGE_ID as i32;
-        message.window_handle = loader_emulator
-            .dll_window_inner
-            .dll_window
-            .read()
-            .get_handle_as_int();
+        message.window_handle = loader_emulator.dll_window.inner.read().get_handle_as_int();
 
         let message_ptr: *const Message = &message;
         let message_ptr: *const u8 = message_ptr as *const u8;
-        let message_buff: &[u8] =
-            std::slice::from_raw_parts(message_ptr, std::mem::size_of::<Message>());
+        let message_buff: &[u8] = from_raw_parts(message_ptr, size_of::<Message>());
 
-        std::ptr::copy_nonoverlapping(
+        copy_nonoverlapping(
             message_buff.as_ptr(),
             loader_emulator.mapped_file.get_file_ptr() as *mut u8,
-            std::mem::size_of::<Message>(),
+            size_of::<Message>(),
         );
 
         let process_handle_arc = loader_emulator.process_handle.clone();
@@ -125,7 +113,7 @@ impl LoaderEmulatorInner {
         loader_emulator.event_loop.add_callback(
             "PeekWndMessage",
             Box::new(move || {
-                DllWindow::peek_wnd_message();
+                DllWindowInner::peek_wnd_message();
                 Ok(())
             }),
         );
@@ -139,17 +127,25 @@ impl LoaderEmulatorInner {
         loader_emulator.event_loop.start();
         loader_emulator.shutdown();
 
-        std::process::exit(0);
+        exit(0);
     }
 }
 
-impl LoaderEmulator {
-    pub fn new() -> LoaderEmulator {
-        LoaderEmulator {
+pub struct LoaderEmulatorInner {
+    exe_path: String,
+    process_handle: Arc<RefCell<HANDLE>>,
+    dll_window: DllWindow,
+    event_loop: EventLoop,
+    mapped_file: MappedFile,
+}
+
+impl LoaderEmulatorInner {
+    pub fn new() -> LoaderEmulatorInner {
+        LoaderEmulatorInner {
             exe_path: "".to_string(),
-            process_handle: Arc::new(RefCell::new(std::ptr::null_mut())),
-            dll_window_inner: DllWindowInner::new(),
-            event_loop: EventLoop::new(std::time::Duration::from_millis(25)),
+            process_handle: Arc::new(RefCell::new(null_mut())),
+            dll_window: DllWindow::new(),
+            event_loop: EventLoop::new(Duration::from_millis(25)),
             mapped_file: MappedFile::new(),
         }
     }
@@ -157,18 +153,18 @@ impl LoaderEmulator {
     pub unsafe fn shutdown(&mut self) {
         self.event_loop.stop();
         self.event_loop.remove_all_callbacks();
-        self.dll_window_inner
-            .dll_window
+        self.dll_window
+            .inner
             .write()
             .un_register_on_message_callback(IN_MESSAGE_ID);
-        self.dll_window_inner.dll_window.write().close();
+        self.dll_window.inner.write().close();
         self.mapped_file.close();
     }
 
     pub unsafe fn spawn_process(&mut self) -> Result<HANDLE, ()> {
-        let mut si: STARTUPINFOW = std::mem::zeroed();
-        si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        let mut si: STARTUPINFOW = zeroed();
+        si.cb = size_of::<STARTUPINFOW>() as u32;
+        let mut pi: PROCESS_INFORMATION = zeroed();
 
         let file_name: String = {
             if cfg!(debug_assertions) {
@@ -186,13 +182,13 @@ impl LoaderEmulator {
 
         if CreateProcessW(
             file_name_w32.as_ptr(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
             FALSE,
             0,
-            std::ptr::null_mut(),
-            std::ptr::null(),
+            null_mut(),
+            null(),
             &mut si,
             &mut pi,
         ) == TRUE
@@ -203,21 +199,21 @@ impl LoaderEmulator {
         Err(())
     }
 
-    pub unsafe fn on_income_message_call_back_proxy(
+    pub unsafe fn on_income_message_callback_proxy(
         process_handle: HANDLE,
         _: HWND,
         _: WPARAM,
         lparam: LPARAM,
     ) {
         let address = lparam as LPVOID;
-        let mut buffer = [0x0; std::mem::size_of::<Message>()];
+        let mut buffer = [0x0; size_of::<Message>()];
 
         ReadProcessMemory(
             process_handle,
             address,
             buffer.as_mut_ptr() as LPVOID,
-            std::mem::size_of::<Message>(),
-            std::ptr::null_mut(),
+            size_of::<Message>(),
+            null_mut(),
         );
 
         #[repr(C, packed)]
@@ -226,6 +222,7 @@ impl LoaderEmulator {
         }
 
         let msg: *const Message = buffer.as_ptr() as *const Message;
+
         if (*msg).in_message_id == RequestType::HitRequest as i32 {
             ReplyMessage(((*msg).payload.address + (*msg).payload.value) as LRESULT);
         } else if (*msg).in_message_id == RequestType::FlyRequest as i32 {
@@ -235,16 +232,16 @@ impl LoaderEmulator {
 
             let response_ptr: *const Response = &response;
             let response_ptr: *const u8 = response_ptr as *const u8;
-            let response_buff: &[u8] =
-                std::slice::from_raw_parts(response_ptr, std::mem::size_of::<Response>());
+            let response_buff: &[u8] = from_raw_parts(response_ptr, size_of::<Response>());
 
             WriteProcessMemory(
                 process_handle,
                 address,
                 response_buff.as_ptr() as LPCVOID,
-                std::mem::size_of::<DWORD>(),
-                std::ptr::null_mut(),
+                size_of::<DWORD>(),
+                null_mut(),
             );
+
             ReplyMessage(TRUE as LRESULT);
         } else {
             ReplyMessage(TRUE as LRESULT);

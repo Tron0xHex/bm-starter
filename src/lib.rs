@@ -1,4 +1,3 @@
-#![cfg(windows)]
 extern crate winapi;
 
 extern crate spin;
@@ -19,7 +18,7 @@ use winapi::shared::{
     minwindef::{BOOL, DWORD, HINSTANCE, LPVOID},
 };
 
-use crate::loader_emulator::LoaderEmulatorInner;
+use crate::loader_emulator::LoaderEmulator;
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -33,7 +32,7 @@ pub unsafe extern "system" fn DllMain(
 
     match call_reason {
         DLL_PROCESS_ATTACH => {
-            LoaderEmulatorInner::new().start(dll_module);
+            LoaderEmulator::new().start(dll_module);
         }
         DLL_PROCESS_DETACH => (),
         _ => (),

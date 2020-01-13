@@ -13,27 +13,27 @@ use winapi::um::winuser::{
     WM_DESTROY, WNDCLASSW, WS_OVERLAPPED,
 };
 
-use std::collections::HashMap;
-use std::mem;
-use std::ptr;
-use std::sync::Arc;
 use spin::RwLock;
+use std::collections::HashMap;
+use std::mem::{transmute, zeroed};
+use std::ptr::null_mut;
+use std::sync::Arc;
 
 pub type OnMessageCallback = Box<dyn Fn(HWND, WPARAM, LPARAM)>;
 
-pub struct DllWindowInner {
-    pub dll_window: Arc<RwLock<DllWindow>>,
+pub struct DllWindow {
+    pub inner: Arc<RwLock<DllWindowInner>>,
 }
 
-impl DllWindowInner {
-    pub fn new() -> DllWindowInner {
-        DllWindowInner {
-            dll_window: Arc::new(RwLock::new(DllWindow::new())),
+impl DllWindow {
+    pub fn new() -> DllWindow {
+        DllWindow {
+            inner: Arc::new(RwLock::new(DllWindowInner::new())),
         }
     }
 
     pub unsafe fn create(&mut self, h_instance: HINSTANCE) -> bool {
-        let mut dll_window = self.dll_window.write();
+        let mut dll_window = self.inner.write();
 
         let class_name = win32_string(CLASS_NAME);
         let window_name = win32_string(WINDOW_NAME);
@@ -53,10 +53,10 @@ impl DllWindowInner {
             0,
             200,
             100,
-            ptr::null_mut(),
-            ptr::null_mut(),
+            null_mut(),
+            null_mut(),
             dll_window.h_instance,
-            ptr::null_mut(),
+            null_mut(),
         );
 
         if dll_window.handle.is_null() {
@@ -66,7 +66,7 @@ impl DllWindowInner {
         SetWindowLongPtrW(
             dll_window.handle,
             GWLP_USERDATA,
-            mem::transmute(self.dll_window.clone()),
+            transmute(self.inner.clone()),
         );
 
         ShowWindow(dll_window.handle, SW_HIDE);
@@ -76,46 +76,42 @@ impl DllWindowInner {
     }
 }
 
-pub struct DllWindow {
+pub struct DllWindowInner {
     callbacks: HashMap<u32, OnMessageCallback>,
     h_instance: HINSTANCE,
     handle: HWND,
 }
 
-pub unsafe extern "system" fn dll_window_proc(
-    hwnd: HWND,
-    msg: UINT,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
-    let self_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-
-    if msg == WM_DESTROY {
-        PostQuitMessage(0);
-        return 0;
-    } else {
-        if self_ptr != 0 {
-            let dll_window: Arc<RwLock<DllWindow>> = mem::transmute(self_ptr);
-
-            for (id, callback) in dll_window.read().callbacks.iter() {
-                if msg == *id {
-                    callback(hwnd, wparam, lparam);
-                }
-            }
-
-            return DefWindowProcW(hwnd, msg, wparam, lparam);
-        }
-
-        return DefWindowProcW(hwnd, msg, wparam, lparam);
-    }
-}
-
-impl DllWindow {
-    pub fn new() -> DllWindow {
-        DllWindow {
+impl DllWindowInner {
+    pub fn new() -> DllWindowInner {
+        DllWindowInner {
             callbacks: HashMap::new(),
-            h_instance: ptr::null_mut(),
-            handle: ptr::null_mut(),
+            h_instance: null_mut(),
+            handle: null_mut(),
+        }
+    }
+
+    pub unsafe extern "system" fn dll_window_proc(
+        hwnd: HWND,
+        msg: UINT,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        let self_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        if msg == WM_DESTROY {
+            PostQuitMessage(0);
+            return 0;
+        } else {
+            if self_ptr != 0 {
+                let dll_window: Arc<RwLock<DllWindowInner>> = transmute(self_ptr);
+                for (id, callback) in dll_window.read().callbacks.iter() {
+                    if msg == *id {
+                        callback(hwnd, wparam, lparam);
+                    }
+                }
+                return DefWindowProcW(hwnd, msg, wparam, lparam);
+            }
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
         }
     }
 
@@ -128,15 +124,15 @@ impl DllWindow {
 
         let wcex = WNDCLASSW {
             style: CS_HREDRAW | CS_VREDRAW,
-            lpfnWndProc: Some(dll_window_proc),
+            lpfnWndProc: Some(DllWindowInner::dll_window_proc),
             hInstance: self.h_instance,
             lpszClassName: class_name.as_ptr(),
             cbClsExtra: 0,
             cbWndExtra: 0,
-            hIcon: ptr::null_mut(),
-            hCursor: ptr::null_mut(),
-            hbrBackground: ptr::null_mut(),
-            lpszMenuName: ptr::null_mut(),
+            hIcon: null_mut(),
+            hCursor: null_mut(),
+            hbrBackground: null_mut(),
+            lpszMenuName: null_mut(),
         };
 
         if RegisterClassW(&wcex) == 0 {
@@ -161,7 +157,8 @@ impl DllWindow {
     }
 
     pub unsafe fn peek_wnd_message() {
-        let mut msg: MSG = std::mem::zeroed();
+        let mut msg: MSG = zeroed();
+
         if PeekMessageW(&mut msg as *mut MSG, 0 as HWND, 0, 0, PM_REMOVE) == TRUE {
             TranslateMessage(&msg as *const MSG);
             DispatchMessageW(&msg as *const MSG);

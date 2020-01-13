@@ -8,7 +8,7 @@ use winapi::shared::minwindef::{LPVOID, TRUE};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::memoryapi::{CreateFileMappingW, MapViewOfFile, FILE_MAP_ALL_ACCESS};
 
-use std::ptr;
+use std::ptr::null_mut;
 
 pub struct MappedFile {
     file_handle: HANDLE,
@@ -18,8 +18,8 @@ pub struct MappedFile {
 impl MappedFile {
     pub fn new() -> MappedFile {
         MappedFile {
-            file_handle: ptr::null_mut(),
-            file_pointer: ptr::null_mut(),
+            file_handle: null_mut(),
+            file_pointer: null_mut(),
         }
     }
 
@@ -28,7 +28,7 @@ impl MappedFile {
 
         self.file_handle = CreateFileMappingW(
             INVALID_HANDLE_VALUE,
-            ptr::null_mut(),
+            null_mut(),
             PAGE_READWRITE,
             0,
             size as u32,
