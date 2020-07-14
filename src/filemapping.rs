@@ -24,14 +24,7 @@ impl FileMapping {
     }
 
     pub unsafe fn create(&mut self, size: usize) -> bool {
-        self.file_handle = CreateFileMappingW(
-            INVALID_HANDLE_VALUE,
-            null_mut(),
-            PAGE_READWRITE,
-            0,
-            size as u32,
-            MAPPED_FILE_NAME.as_ptr(),
-        );
+        self.file_handle = CreateFileMappingW(INVALID_HANDLE_VALUE, null_mut(), PAGE_READWRITE, 0, size as u32, MAPPED_FILE_NAME.as_ptr());
 
         if self.file_handle.is_null() {
             return false;

@@ -12,9 +12,7 @@ use winapi::{
     um::{
         fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES},
         minwinbase::STILL_ACTIVE,
-        processthreadsapi::{
-            CreateProcessW, ExitProcess, GetExitCodeProcess, PROCESS_INFORMATION, STARTUPINFOW,
-        },
+        processthreadsapi::{CreateProcessW, ExitProcess, GetExitCodeProcess, PROCESS_INFORMATION, STARTUPINFOW},
         synchapi::Sleep,
         winnt::HANDLE,
         winuser::{SetWindowLongPtrW, GWLP_USERDATA},
@@ -56,11 +54,7 @@ impl Emulator {
         let message_ptr: *const u8 = message_ptr as *const u8;
         let message_buff: &[u8] = from_raw_parts(message_ptr, size_of::<Message>());
 
-        copy_nonoverlapping(
-            message_buff.as_ptr(),
-            self.file_mapping.get_file_ptr() as *mut u8,
-            size_of::<Message>(),
-        );
+        copy_nonoverlapping(message_buff.as_ptr(), self.file_mapping.get_file_ptr() as *mut u8, size_of::<Message>());
 
         if let Ok(handle) = self.spawn_process() {
             self.h_process = handle;
@@ -68,11 +62,7 @@ impl Emulator {
             panic!("unable to start the process.")
         }
 
-        SetWindowLongPtrW(
-            self.dll_window.get_handle(),
-            GWLP_USERDATA,
-            transmute(self.h_process),
-        );
+        SetWindowLongPtrW(self.dll_window.get_handle(), GWLP_USERDATA, transmute(self.h_process));
 
         loop {
             if self.is_process_running() {

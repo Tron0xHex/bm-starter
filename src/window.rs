@@ -12,19 +12,16 @@ use core::{
 };
 use winapi::{
     shared::{
-        minwindef::{
-            DWORD, FALSE, HINSTANCE, LPARAM, LPCVOID, LPVOID, LRESULT, TRUE, UINT, WPARAM,
-        },
+        minwindef::{DWORD, FALSE, HINSTANCE, LPARAM, LPCVOID, LPVOID, LRESULT, TRUE, UINT, WPARAM},
         windef::HWND,
     },
     um::{
         memoryapi::{ReadProcessMemory, WriteProcessMemory},
         winnt::HANDLE,
         winuser::{
-            CloseWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW,
-            InSendMessage, PeekMessageW, PostQuitMessage, RegisterClassW, ReplyMessage, ShowWindow,
-            TranslateMessage, UnregisterClassW, UpdateWindow, CS_HREDRAW, CS_VREDRAW,
-            GWLP_USERDATA, MSG, PM_REMOVE, SW_HIDE, WM_DESTROY, WNDCLASSW, WS_OVERLAPPED,
+            CloseWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetWindowLongPtrW, InSendMessage, PeekMessageW, PostQuitMessage, RegisterClassW,
+            ReplyMessage, ShowWindow, TranslateMessage, UnregisterClassW, UpdateWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, MSG, PM_REMOVE, SW_HIDE,
+            WM_DESTROY, WNDCLASSW, WS_OVERLAPPED,
         },
     },
 };
@@ -124,12 +121,7 @@ impl Window {
         }
     }
 
-    pub unsafe extern "system" fn dll_window_proc(
-        hwnd: HWND,
-        msg: UINT,
-        wparam: WPARAM,
-        lparam: LPARAM,
-    ) -> LRESULT {
+    pub unsafe extern "system" fn dll_window_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         let h_process: HANDLE = transmute(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
         if msg == WM_DESTROY {
@@ -140,13 +132,7 @@ impl Window {
                 let address = lparam as LPVOID;
                 let mut buffer = [0x0; size_of::<Message>()];
 
-                ReadProcessMemory(
-                    h_process,
-                    address,
-                    buffer.as_mut_ptr() as LPVOID,
-                    size_of::<Message>(),
-                    null_mut(),
-                );
+                ReadProcessMemory(h_process, address, buffer.as_mut_ptr() as LPVOID, size_of::<Message>(), null_mut());
 
                 #[repr(C, packed)]
                 struct Response {
@@ -156,9 +142,7 @@ impl Window {
                 let srom_msg: *const Message = buffer.as_ptr() as *const Message;
 
                 if (*srom_msg).in_message_id == SecuRomRequests::Hit as i32 {
-                    ReplyMessage(
-                        ((*srom_msg).payload.address + (*srom_msg).payload.value) as LRESULT,
-                    );
+                    ReplyMessage(((*srom_msg).payload.address + (*srom_msg).payload.value) as LRESULT);
                 } else if (*srom_msg).in_message_id == SecuRomRequests::Fly as i32 {
                     let address = (*srom_msg).payload.address as LPVOID;
 
@@ -168,13 +152,7 @@ impl Window {
                     let response_ptr: *const u8 = response_ptr as *const u8;
                     let response_buff: &[u8] = from_raw_parts(response_ptr, size_of::<Response>());
 
-                    WriteProcessMemory(
-                        h_process,
-                        address,
-                        response_buff.as_ptr() as LPCVOID,
-                        size_of::<DWORD>(),
-                        null_mut(),
-                    );
+                    WriteProcessMemory(h_process, address, response_buff.as_ptr() as LPCVOID, size_of::<DWORD>(), null_mut());
 
                     ReplyMessage(TRUE as LRESULT);
                 } else {
