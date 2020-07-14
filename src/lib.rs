@@ -1,28 +1,24 @@
-extern crate winapi;
-
-extern crate spin;
-
-extern crate libc;
+#![no_std]
+#![allow(non_snake_case)]
 
 mod consts;
-mod dll_window;
-mod event_loop;
-mod loader_emulator;
-mod mapped_file;
+mod emulator;
+mod enums;
+mod filemapping;
 mod message;
-mod request_type;
-mod win32;
+mod window;
 
+use core::panic::PanicInfo;
+
+use emulator::Emulator;
 use winapi::shared::{
     minwindef,
     minwindef::{BOOL, DWORD, HINSTANCE, LPVOID},
 };
 
-use crate::loader_emulator::LoaderEmulator;
-
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
-pub unsafe extern "system" fn DllMain(
+pub unsafe extern "system" fn _DllMainCRTStartup(
     dll_module: HINSTANCE,
     call_reason: DWORD,
     reserved: LPVOID,
@@ -32,10 +28,16 @@ pub unsafe extern "system" fn DllMain(
 
     match call_reason {
         DLL_PROCESS_ATTACH => {
-            LoaderEmulator::new().start(dll_module);
+            Emulator::new().start(dll_module);
         }
         DLL_PROCESS_DETACH => (),
         _ => (),
     }
     minwindef::TRUE
+}
+
+#[panic_handler]
+#[no_mangle]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }

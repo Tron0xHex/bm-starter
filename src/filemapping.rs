@@ -1,38 +1,36 @@
 use crate::consts::MAPPED_FILE_NAME;
-use crate::win32::win32_string;
 
-use winapi::um::winnt::{HANDLE, PAGE_READWRITE};
+use core::ptr::null_mut;
+use winapi::{
+    shared::minwindef::{LPVOID, TRUE},
+    um::{
+        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
+        memoryapi::{CreateFileMappingW, MapViewOfFile, FILE_MAP_ALL_ACCESS},
+        winnt::{HANDLE, PAGE_READWRITE},
+    },
+};
 
-use winapi::shared::minwindef::{LPVOID, TRUE};
-
-use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-use winapi::um::memoryapi::{CreateFileMappingW, MapViewOfFile, FILE_MAP_ALL_ACCESS};
-
-use std::ptr::null_mut;
-
-pub struct MappedFile {
+pub struct FileMapping {
     file_handle: HANDLE,
     file_pointer: LPVOID,
 }
 
-impl MappedFile {
-    pub fn new() -> MappedFile {
-        MappedFile {
+impl FileMapping {
+    pub fn new() -> Self {
+        Self {
             file_handle: null_mut(),
             file_pointer: null_mut(),
         }
     }
 
     pub unsafe fn create(&mut self, size: usize) -> bool {
-        let mapped_file_name = win32_string(MAPPED_FILE_NAME);
-
         self.file_handle = CreateFileMappingW(
             INVALID_HANDLE_VALUE,
             null_mut(),
             PAGE_READWRITE,
             0,
             size as u32,
-            mapped_file_name.as_ptr(),
+            MAPPED_FILE_NAME.as_ptr(),
         );
 
         if self.file_handle.is_null() {
