@@ -1,24 +1,33 @@
-extern crate winapi;
-
-extern crate spin;
-
-extern crate libc;
-
 mod consts;
-mod dll_window;
-mod event_loop;
-mod loader_emulator;
-mod mapped_file;
+mod enums;
+mod loader;
 mod message;
-mod request_type;
-mod win32;
+mod utils;
+mod window;
 
-use winapi::shared::{
-    minwindef,
-    minwindef::{BOOL, DWORD, HINSTANCE, LPVOID},
-};
+use anyhow::Result;
+use loader::Loader;
+use log::error;
+use simplelog::{CombinedLogger, ConfigBuilder, LevelFilter, WriteLogger};
+use std::fs::File;
+use winapi::shared::minwindef::{BOOL, DWORD, HINSTANCE, LPVOID, TRUE};
 
-use crate::loader_emulator::LoaderEmulator;
+const LOG_FILE: &str = "Log.log";
+
+#[inline]
+fn setup_logger() -> Result<()> {
+    CombinedLogger::init(vec![WriteLogger::new(
+        LevelFilter::Debug,
+        ConfigBuilder::new()
+            .set_target_level(LevelFilter::Off)
+            .set_location_level(LevelFilter::Debug)
+            .set_time_format_str("%F %T%.3f")
+            .build(),
+        File::create(LOG_FILE)?,
+    )])?;
+
+    Ok(())
+}
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -28,14 +37,21 @@ pub unsafe extern "system" fn DllMain(
     reserved: LPVOID,
 ) -> BOOL {
     const DLL_PROCESS_ATTACH: DWORD = 1;
-    const DLL_PROCESS_DETACH: DWORD = 0;
 
     match call_reason {
         DLL_PROCESS_ATTACH => {
-            LoaderEmulator::new().start(dll_module);
+            if cfg!(debug_assertions) {
+                if let Err(err) = setup_logger() {
+                    panic!("Unable to setup logger!");
+                }
+            }
+
+            if let Err(err) = Loader::default().start() {
+                error!("{}", err);
+            }
         }
-        DLL_PROCESS_DETACH => (),
         _ => (),
     }
-    minwindef::TRUE
+
+    TRUE
 }

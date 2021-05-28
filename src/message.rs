@@ -1,14 +1,16 @@
-#[repr(C, packed)]
+#[repr(C)]
+#[derive(Debug, Clone)]
 pub struct Payload {
-    pub address: i32,
-    pub value: i32,
+    pub address: u32,
+    pub value: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
+#[derive(Debug, Clone)]
 pub struct Message {
-    pub unk_var: i32,
-    pub window_handle: i32,
-    pub pad: [i32; 2],
-    pub in_message_id: i32,
+    pub unk_var: u32,
+    pub window_handle: u32,
+    pub pad: [u32; 2],
+    pub in_message_id: u32,
     pub payload: Payload,
 }
