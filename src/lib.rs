@@ -31,11 +31,7 @@ fn setup_logger() -> Result<()> {
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
-pub unsafe extern "system" fn DllMain(
-    dll_module: HINSTANCE,
-    call_reason: DWORD,
-    reserved: LPVOID,
-) -> BOOL {
+pub unsafe extern "system" fn _DllMainCRTStartup(dll_module: HINSTANCE, call_reason: DWORD, reserved: LPVOID) -> BOOL {
     const DLL_PROCESS_ATTACH: DWORD = 1;
 
     match call_reason {
@@ -54,4 +50,10 @@ pub unsafe extern "system" fn DllMain(
     }
 
     TRUE
+}
+
+#[panic_handler]
+#[no_mangle]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
 }
